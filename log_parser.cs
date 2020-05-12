@@ -11,6 +11,8 @@ public class LogParser {
     string outFilename = "";
     string header = "Attack ID," +
       "Joystick Type (1 = Conventional)," +
+      "Input Gesture ID," +
+      "Times Done this Input Gesture ID," +
       "Target Gesture ID," + 
       "Success," +
       "Time Spent";
