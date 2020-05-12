@@ -3,6 +3,8 @@ using System.Xml;
 using System.IO;
 using System.Globalization;
 
+public enum LogState { DEMO, TRAIN, CHALLENGE };
+
 public class LogParser {
 
   public static void Main(string[] args) {
@@ -40,12 +42,17 @@ public class LogParser {
       foreach (XmlNode childNode in dataItems) {
         parser.Parse(childNode, sw);
       }
+      parser.WriteResults(sw);
     }
   }
 
   static CultureInfo usCulture = new CultureInfo("en-US");
 
   float m_timeSetTargetMoveLast = 0f;
+  int[] m_failures = new int[4];
+  int[] m_attempts = new int[4];
+  int[] m_attacksDone = new int[4];
+  float[] m_totalTimeSpent = new float[4];
 
   void Parse(XmlNode currentNode, StreamWriter sw) {
     XmlNode typeNode = currentNode["logType"];
@@ -55,7 +62,33 @@ public class LogParser {
       ParseChangedMove(currentNode, sw);
     } else if (type == "AttackClick") {
       ParseAttackClick(currentNode, sw);
+    } else if (type == "StartedTesting") {
+      ParseStartedTesting(sw);
+    // writing "Challange" instead of "Challenge" below is an intentional typo
+    } else if (type == "StartedChallange") {
+      ParseStartedChallenge(sw);
+    } else if (type == "StoppedTesting") {
+      ParseStoppedTesting(sw);
+    } else if (type == "StoppedChallange") {
+      ParseStoppedChallenge(sw);
     }
+
+  }
+
+  void ParseStartedTesting(StreamWriter sw) {
+    sw.WriteLine("======== LOGGING START ========");
+  }
+
+  void ParseStartedChallenge(StreamWriter sw) {
+    sw.WriteLine("======== CHALLENGE START ==========");
+  }
+
+  void ParseStoppedTesting(StreamWriter sw) {
+    sw.WriteLine("======== LOGGING END ========");
+  }
+
+  void ParseStoppedChallenge(StreamWriter sw) {
+    sw.WriteLine("======== CHALLENGE END =========");
   }
 
   void ParseChangedMove(XmlNode node, StreamWriter sw) {
@@ -66,28 +99,72 @@ public class LogParser {
   }
 
   void ParseAttackClick(XmlNode node, StreamWriter sw) {
-    // Note: attack clicks use lower case s in "timestamp" node
     XmlNode gestureLogDataNode = node["gestureLogData"];
     if (gestureLogDataNode == null) return;
-    string line = gestureLogDataNode["id"].InnerText + ",";
-    line += LogParser.GetJoystickType(gestureLogDataNode) + ",";
-    line += gestureLogDataNode["targetGesture"].InnerText + ",";
-    line += LogParser.GetSuccessValue(gestureLogDataNode) + ",";
-    line += LogParser.GetTimeSpent(gestureLogDataNode, m_timeSetTargetMoveLast);
+
+    string id = gestureLogDataNode["id"].InnerText;
+    string conventionalJoystick = gestureLogDataNode["conventionalJoystick"].InnerText;
+    string targetGesture = gestureLogDataNode["targetGesture"].InnerText;
+    string inputGesture = gestureLogDataNode["inputGesture"].InnerText;
+    // Note: attack clicks use lower case s in "timestamp" node
+    string timestamp = gestureLogDataNode["timestamp"].InnerText;
+    
+    float timestamp_single = Convert.ToSingle(timestamp, usCulture);
+    string success = LogParser.GetSuccessValue(inputGesture, targetGesture);
+    string timeSpent = LogParser.GetTimeSpent(
+      timestamp_single, m_timeSetTargetMoveLast);
+    string joystickType = LogParser.GetJoystickType(conventionalJoystick);
+    string attacksDone = "-1";
+    
+    int targetGestureID = Convert.ToInt32(targetGesture);
+    int inputGestureID = Convert.ToInt32(inputGesture);
+    float t = Convert.ToSingle(timeSpent, usCulture);
+    if (targetGestureID >= 0) {
+      m_attempts[targetGestureID]++;
+      m_totalTimeSpent[targetGestureID] += t;
+    }
+    if (inputGestureID >= 0) {
+      m_attacksDone[inputGestureID]++;
+      attacksDone = m_attacksDone[inputGestureID].ToString();
+    }
+    if (success == "0") {
+      m_failures[targetGestureID]++;
+    }
+
+    string line = id + ",";
+    line += joystickType + ",";
+    line += inputGesture + ",";
+    line += attacksDone + ",";
+    line += targetGesture + ",";
+    line += success + ",";
+    line += timeSpent;
     sw.WriteLine(line);
   }
 
-  static string GetTimeSpent(XmlNode node, float timeSetTargetMoveLast) {
-    XmlNode timestampNode = node["timestamp"];
-    if (timestampNode == null) return "";
+  void WriteResults(StreamWriter sw) {
+    float[] averageTimeSpent = new float[4];
+    float[] averageFailures = new float[4];
+    string header = "Attack,Average Time Spent,Average Failures";
+    sw.WriteLine(header);
 
-    float timestamp = Convert.ToSingle(timestampNode.InnerText, usCulture);
+    for (int i = 0; i < 4; i++) {
+      averageTimeSpent[i] = (float)m_totalTimeSpent[i] / m_attempts[i];
+      averageFailures[i] = (float)m_failures[i] / m_attempts[i];
+
+      string line = i.ToString() + ",";
+      line += averageTimeSpent[i].ToString(usCulture) + ",";
+      line += averageFailures[i].ToString(usCulture);
+
+      sw.WriteLine(line);
+    }
+  }
+
+  static string GetTimeSpent(float timestamp, float timeSetTargetMoveLast) {
     float t = timestamp - timeSetTargetMoveLast;
     return t.ToString(usCulture);
   }
 
-  static string GetJoystickType(XmlNode attackClick) {
-    string conventionalJoystick = attackClick["conventionalJoystick"].InnerText;
+  static string GetJoystickType(string conventionalJoystick) {
     if (conventionalJoystick == "true") {
       return "1";
     } else {
@@ -95,33 +172,16 @@ public class LogParser {
     }
   }
 
-  static string GetSuccessValue(XmlNode attackClick) {
-    string inputGesture = attackClick["inputGesture"].InnerText;
-    string targetGesture = attackClick["targetGesture"].InnerText;
-    if (targetGesture != "-1" && inputGesture == targetGesture) {
+  static string GetSuccessValue(string inputGesture, string targetGesture) {
+    if (targetGesture == "-1") {
+      return "-1";
+    } else if (targetGesture == inputGesture) {
       return "1";
     } else {
       return "0";
     }
   }
 
-  static int[] GetFails(XmlNodeList attacks) {
-    int[] fails = new int[4];
-
-    for (int i = 0; i < attacks.Count; i++) {
-      XmlNode attempt = attacks[i];
-      int inputGesture = Convert.ToInt32(
-        attempt["gestureLogData"]["inputGesture"].InnerText
-	);
-      int targetGesture = Convert.ToInt32(
-        attempt["gestureLogData"]["targetGesture"].InnerText
-	);
-      if (targetGesture >= 0 && inputGesture != targetGesture) {
-        fails[targetGesture]++;
-      }
-    }
-    return fails;
-  }
-
+  
 
 }
