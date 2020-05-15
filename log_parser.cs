@@ -183,22 +183,22 @@ public class LogParser
 
     void ParseStartedTesting(StreamWriter sw)
     {
-        sw.WriteLine("======== LOGGING START ========");
+        sw.WriteLine("--------LOGSTART--------");
     }
 
     void ParseStartedChallenge(StreamWriter sw)
     {
-        sw.WriteLine("======== CHALLENGE START ==========");
+        sw.WriteLine("--------CHALLENGESTART--------");
     }
 
     void ParseStoppedTesting(StreamWriter sw)
     {
-        sw.WriteLine("======== LOGGING END ========");
+        sw.WriteLine("--------LOGEND--------");
     }
 
     void ParseStoppedChallenge(StreamWriter sw)
     {
-        sw.WriteLine("======== CHALLENGE END =========");
+        sw.WriteLine("--------CHALLENGEEND--------");
     }
 
     void ParseChangedMove(XmlNode node, StreamWriter sw)
