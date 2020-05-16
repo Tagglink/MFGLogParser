@@ -368,8 +368,8 @@ public class LogParser
         aTanB = Math.Atan2(B.y - center.y, B.x - center.x);
 
         //  Determine next point in Clockwise rotation
-        if (aTanA < aTanB) return -1;
-        else if (aTanA > aTanB) return 1;
+        if (aTanA > aTanB) return -1;
+        else if (aTanA < aTanB) return 1;
         return 0;
     }
 
