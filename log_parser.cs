@@ -20,9 +20,9 @@ public struct InputPositionLog
     public Vector2 joystickFingerPos;
 }
 
-public struct JoystickData
+public struct ChallengeData
 {
-    public JoystickData(string name = "") {
+    public ChallengeData(string name = "") {
         attempts = new int[4];
 	failures = new int[4];
 	attacksDone = new int[4];
@@ -73,8 +73,8 @@ public class LogParser
 	}
 
 	csvfiles = new string[logfiles.Length];
-	List<JoystickData> smallJoystickData = new List<JoystickData>();
-	List<JoystickData> bigJoystickData = new List<JoystickData>();
+	List<ChallengeData> smallChallengeData = new List<ChallengeData>();
+	List<ChallengeData> bigChallengeData = new List<ChallengeData>();
         
 	for (int i = 0; i < logfiles.Length; i++) {
 	    csvfiles[i] = args[1] + 
@@ -84,29 +84,29 @@ public class LogParser
 
 	    LogParser parser = new LogParser();
 	    parser.ParseLog(logfiles[i], csvfiles[i]);
-	    JoystickData[] jsData = parser.GetJoystickData();
-	    smallJoystickData.Add(jsData[0]);
-	    bigJoystickData.Add(jsData[1]);
+	    ChallengeData[] chData = parser.GetChallengeData();
+	    smallChallengeData.Add(chData[0]);
+	    bigChallengeData.Add(chData[1]);
 	}
         
         indexname = Path.GetDirectoryName(csvfiles[0]) + "/index.csv";
 
         using (StreamWriter sw = new StreamWriter(indexname)) {
 	    sw.WriteLine("--------Small Joystick Total Averages--------");
-	    LogParser.WriteTotalResults(smallJoystickData.ToArray(), sw);
+	    LogParser.WriteTotalAverages(smallChallengeData.ToArray(), sw);
 	    sw.WriteLine("--------Big Joystick Total Averages--------");
-	    LogParser.WriteTotalResults(bigJoystickData.ToArray(), sw);
+	    LogParser.WriteTotalAverages(bigChallengeData.ToArray(), sw);
 	}
     }
 
     static CultureInfo usCulture = new CultureInfo("en-US");
 
     float m_timeSetTargetMoveLast = 0f;
-    JoystickData[] m_jsData = new JoystickData[2];
+    ChallengeData[] m_chData = new ChallengeData[2];
 
     LogParser() {
-        m_jsData[0] = new JoystickData("Small Joystick");
-	m_jsData[1] = new JoystickData("Big Joystick");
+        m_chData[0] = new ChallengeData("Small Joystick");
+	m_chData[1] = new ChallengeData("Big Joystick");
     }
 
     void ParseLog(string inFilename, string outFilename) {
@@ -160,8 +160,8 @@ public class LogParser
         }
     }
 
-    JoystickData[] GetJoystickData() {
-        return m_jsData;
+    ChallengeData[] GetChallengeData() {
+        return m_chData;
     }
 
     void ParseNode(XmlNode currentNode, StreamWriter sw, InputPositionLog[] touchPositionLogs)
@@ -277,22 +277,22 @@ public class LogParser
         float t = Convert.ToSingle(timeSpent, usCulture);
         if (targetGestureID >= 0)
         {
-            m_jsData[joystickID].attempts[targetGestureID]++;
-	    m_jsData[joystickID].totalDistance[targetGestureID] += totalDistance;
-	    m_jsData[joystickID].totalArea[targetGestureID] += totalArea;
+            m_chData[joystickID].attempts[targetGestureID]++;
+	    m_chData[joystickID].totalDistance[targetGestureID] += totalDistance;
+	    m_chData[joystickID].totalArea[targetGestureID] += totalArea;
         }
         if (inputGestureID >= 0)
         {
-            m_jsData[joystickID].attacksDone[inputGestureID]++;
-            attacksDone = m_jsData[joystickID].attacksDone[inputGestureID].ToString();
+            m_chData[joystickID].attacksDone[inputGestureID]++;
+            attacksDone = m_chData[joystickID].attacksDone[inputGestureID].ToString();
         }
         if (success == "0")
         {
-            m_jsData[joystickID].failures[targetGestureID]++;
+            m_chData[joystickID].failures[targetGestureID]++;
         }
         else if (success == "1")
         {
-            m_jsData[joystickID].totalTimeSpent[targetGestureID] += t;
+            m_chData[joystickID].totalTimeSpent[targetGestureID] += t;
         }
 
         // Final print
@@ -309,73 +309,100 @@ public class LogParser
     }
 
     void WriteResult(StreamWriter sw) {
-        foreach (JoystickData jsData in m_jsData) {
-	    WriteJoystickResult(jsData, sw);
+        foreach (ChallengeData chData in m_chData) {
+	    WriteJoystickResult(chData, sw);
 	}	
 	sw.WriteLine("--------Total Averages--------");
-	WriteTotalResults(m_jsData, sw);
+	WriteTotalAverages(m_chData, sw);
     }
 
-    void WriteJoystickResult(JoystickData jsData, StreamWriter sw)
+    void WriteJoystickResult(ChallengeData chData, StreamWriter sw)
     {
         float[] averageTimeSpent = new float[4];
 	float[] averageFailures = new float[4];
 	double[] averageDistance = new double[4];
 	double[] averageArea = new double[4];
         string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
-	sw.WriteLine("--------" + jsData.name + "--------");
+	sw.WriteLine("--------" + chData.name + "--------");
         sw.WriteLine(header);
 
         for (int i = 0; i < 4; i++)
         {
-            averageTimeSpent[i] = jsData.totalTimeSpent[i] / (jsData.attempts[i] - jsData.failures[i]);
-            averageFailures[i] = (float)jsData.failures[i] / jsData.attempts[i];
-	    averageDistance[i] = jsData.totalDistance[i] / jsData.attempts[i];
-	    averageArea[i] = jsData.totalArea[i] / jsData.attempts[i];
+	    int attackID = LogParser.ReorderAttackID(i);
+            averageTimeSpent[attackID] = chData.totalTimeSpent[attackID] / (
+	        chData.attempts[attackID] - chData.failures[attackID]
+		);
+            averageFailures[attackID] = (float)chData.failures[attackID] / chData.attempts[attackID];
+	    averageDistance[attackID] = chData.totalDistance[attackID] / chData.attempts[attackID];
+	    averageArea[attackID] = chData.totalArea[attackID] / chData.attempts[attackID];
 
-            string line = i.ToString() + ",";
-            line += averageTimeSpent[i].ToString(usCulture) + ",";
-            line += averageFailures[i].ToString(usCulture) + ",";
-	    line += averageDistance[i].ToString(usCulture) + ",";
-	    line += averageArea[i].ToString(usCulture);
+            string line = LogParser.AttackIDToName(attackID) + ",";
+            line += averageTimeSpent[attackID].ToString(usCulture) + ",";
+            line += averageFailures[attackID].ToString(usCulture) + ",";
+	    line += averageDistance[attackID].ToString(usCulture) + ",";
+	    line += averageArea[attackID].ToString(usCulture);
             sw.WriteLine(line);
         }
     }
 
-    static void WriteTotalResults(JoystickData[] jsData, StreamWriter sw) {
+    static void WriteTotalAverages(ChallengeData[] chData, StreamWriter sw) {
         string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
 	sw.WriteLine(header);
 	for (int i = 0; i < 4; i++) {
+	    int attackID = LogParser.ReorderAttackID(i);
 	    int attempts = 0;
 	    int failures = 0;
+	    int successes = 0;
 	    float timeSpent = 0f;
 	    double distance = 0.0;
 	    double area = 0.0;
 
-	    for (int j = 0; j < jsData.Length; j++) {
-	        if (jsData[j].attempts[i] - jsData[j].failures[i] <= 0 &&
-		    jsData[j].totalTimeSpent[i] > 0f) {
-		    Console.WriteLine("This is strange, isn't it..?");
+	    for (int subjectID = 0; subjectID < chData.Length; subjectID++) {
+	        int subjectSuccesses = chData[subjectID].attempts[attackID] - chData[subjectID].failures[attackID];
+		if (subjectSuccesses > 0) {
+		    // When calculating the total number of successes we must avoid cases where
+		    // the subject did not succeed impacting the averages as negative values.
+		    // (Remember that totalTimeSpent == 0 when a subject skips an attack)
+		    successes += subjectSuccesses;
 		}
-	        attempts += jsData[j].attempts[i];
-		failures += jsData[j].failures[i];
-		timeSpent += jsData[j].totalTimeSpent[i];
-		distance += jsData[j].totalDistance[i];
-		area += jsData[j].totalArea[i];
+	        attempts += chData[subjectID].attempts[attackID];
+		failures += chData[subjectID].failures[attackID];
+		timeSpent += chData[subjectID].totalTimeSpent[attackID];
+		distance += chData[subjectID].totalDistance[attackID];
+		area += chData[subjectID].totalArea[attackID];
 	    }
-	    int successes = attempts - failures;
 
 	    float averageTimeSpent = timeSpent / successes;
 	    float averageFailures = (float)failures / attempts;
 	    double averageDistance = distance / attempts;
 	    double averageArea = area / attempts;
 
-	    string line = i.ToString() + ",";
+	    string line = LogParser.AttackIDToName(attackID) + ",";
 	    line += averageTimeSpent.ToString(usCulture) + ",";
             line += averageFailures.ToString(usCulture) + ",";
 	    line += averageDistance.ToString(usCulture) + ",";
 	    line += averageArea.ToString(usCulture);
 	    sw.WriteLine(line);
+	}
+    }
+
+    static int ReorderAttackID(int attackID) {
+        switch (attackID) {
+	    case 0: return 2;
+	    case 1: return 0;
+	    case 2: return 1;
+	    case 3: return 3;
+	    default: return -1;
+	}
+    }
+
+    static string AttackIDToName(int attackID) {
+        switch (attackID) {
+	    case 0: return "DownUp";
+	    case 1: return "Hadouken";
+	    case 2: return "Left";
+	    case 3: return "Shoryuken";
+	    default: return "Null gesture";
 	}
     }
 
