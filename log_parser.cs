@@ -328,7 +328,7 @@ public class LogParser
 
         for (int i = 0; i < 4; i++)
         {
-            averageTimeSpent[i] = jsData.totalTimeSpent[i] / jsData.attempts[i];
+            averageTimeSpent[i] = jsData.totalTimeSpent[i] / (jsData.attempts[i] - jsData.failures[i]);
             averageFailures[i] = (float)jsData.failures[i] / jsData.attempts[i];
 	    averageDistance[i] = jsData.totalDistance[i] / jsData.attempts[i];
 	    averageArea[i] = jsData.totalArea[i] / jsData.attempts[i];
@@ -347,23 +347,28 @@ public class LogParser
 	sw.WriteLine(header);
 	for (int i = 0; i < 4; i++) {
 	    int attempts = 0;
-	    float averageFailures = 0f;
-	    float averageTimeSpent = 0f;
-	    double averageDistance = 0.0;
-	    double averageArea = 0.0;
+	    int failures = 0;
+	    float timeSpent = 0f;
+	    double distance = 0.0;
+	    double area = 0.0;
 
 	    for (int j = 0; j < jsData.Length; j++) {
+	        if (jsData[j].attempts[i] - jsData[j].failures[i] <= 0 &&
+		    jsData[j].totalTimeSpent[i] > 0f) {
+		    Console.WriteLine("This is strange, isn't it..?");
+		}
 	        attempts += jsData[j].attempts[i];
-		averageFailures += jsData[j].failures[i];
-		averageTimeSpent += jsData[j].totalTimeSpent[i];
-		averageDistance += jsData[j].totalDistance[i];
-		averageArea += jsData[j].totalArea[i];
+		failures += jsData[j].failures[i];
+		timeSpent += jsData[j].totalTimeSpent[i];
+		distance += jsData[j].totalDistance[i];
+		area += jsData[j].totalArea[i];
 	    }
-            
-	    averageFailures /= attempts;
-	    averageTimeSpent /= attempts;
-	    averageDistance /= attempts;
-	    averageArea /= attempts;
+	    int successes = attempts - failures;
+
+	    float averageTimeSpent = timeSpent / successes;
+	    float averageFailures = (float)failures / attempts;
+	    double averageDistance = distance / attempts;
+	    double averageArea = area / attempts;
 
 	    string line = i.ToString() + ",";
 	    line += averageTimeSpent.ToString(usCulture) + ",";
