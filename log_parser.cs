@@ -20,11 +20,96 @@ public struct InputPositionLog
     public Vector2 joystickFingerPos;
 }
 
+public struct JoystickData
+{
+    public JoystickData(string name = "") {
+        attempts = new int[4];
+	failures = new int[4];
+	attacksDone = new int[4];
+	totalTimeSpent = new float[4];
+	totalDistance = new double[4];
+	totalArea = new double[4];
+
+	this.name = name;
+    }
+
+    public int[] attempts;
+    public int[] failures;
+    public int[] attacksDone;
+    public float[] totalTimeSpent;
+    public double[] totalDistance;
+    public double[] totalArea;
+    public string name;
+}
+
 public class LogParser
 {
     public static void Main(string[] args)
     {
-        string outFilename = "";
+        string[] logfiles;
+	string[] csvfiles;
+	string indexname = "";
+        if (args.Length < 2)
+        {
+            Console.WriteLine("Usage: log_parser.exe logdir csvdir");
+	    return;
+        }
+	else if (Directory.Exists(args[1]))
+	{
+	    try { 
+	        logfiles = Directory.EnumerateFiles(args[0], "*.xml").ToArray();
+            } catch (Exception e) {
+	        Console.WriteLine(e.Message);
+		return;
+            }
+	    if (logfiles.Length <= 0) {
+	        Console.WriteLine("No log files found in directory.");
+		return;
+            }
+	}
+	else {
+	    Console.WriteLine("CSV directory does not exist.");
+	    return;
+	}
+
+	csvfiles = new string[logfiles.Length];
+	List<JoystickData> smallJoystickData = new List<JoystickData>();
+	List<JoystickData> bigJoystickData = new List<JoystickData>();
+        
+	for (int i = 0; i < logfiles.Length; i++) {
+	    csvfiles[i] = args[1] + 
+	        Path.GetFileNameWithoutExtension(logfiles[i]) + 
+		".csv";
+	    Console.WriteLine(csvfiles[i]);
+
+	    LogParser parser = new LogParser();
+	    parser.ParseLog(logfiles[i], csvfiles[i]);
+	    JoystickData[] jsData = parser.GetJoystickData();
+	    smallJoystickData.Add(jsData[0]);
+	    bigJoystickData.Add(jsData[1]);
+	}
+        
+        indexname = Path.GetDirectoryName(csvfiles[0]) + "/index.csv";
+
+        using (StreamWriter sw = new StreamWriter(indexname)) {
+	    sw.WriteLine("--------Small Joystick Total Averages--------");
+	    LogParser.WriteTotalResults(smallJoystickData.ToArray(), sw);
+	    sw.WriteLine("--------Big Joystick Total Averages--------");
+	    LogParser.WriteTotalResults(bigJoystickData.ToArray(), sw);
+	}
+    }
+
+    static CultureInfo usCulture = new CultureInfo("en-US");
+
+    float m_timeSetTargetMoveLast = 0f;
+    JoystickData[] m_jsData = new JoystickData[2];
+
+    LogParser() {
+        m_jsData[0] = new JoystickData("Small Joystick");
+	m_jsData[1] = new JoystickData("Big Joystick");
+    }
+
+    void ParseLog(string inFilename, string outFilename) {
         string header = "Attack ID," +
           "Joystick Type (1 = Conventional)," +
           "Input Gesture ID," +
@@ -38,21 +123,7 @@ public class LogParser
         XmlDocument doc = new XmlDocument();
         doc.PreserveWhitespace = true;
 
-        if (args.Length < 1)
-        {
-            Console.WriteLine("Usage: log_parser.exe UserLog*.xml [UserLog*.csv]");
-        }
-        else if (args.Length < 2)
-        {
-            outFilename = Path.GetFileNameWithoutExtension(args[0]) + ".csv";
-            Console.WriteLine("Writing to default filename " + outFilename);
-        }
-        else
-        {
-            outFilename = args[1];
-        }
-
-        try { doc.Load(args[0]); }
+        try { doc.Load(inFilename); }
         catch
         {
             Console.WriteLine("File not found!");
@@ -62,14 +133,12 @@ public class LogParser
         XmlNodeList dataItems;
         XmlNodeList positionDataItems;
 
-        LogParser parser = new LogParser();
         dataItems = root["LogDataItems"].ChildNodes;
         positionDataItems = root["inputBufferTouchLogs"].SelectNodes("InputBufferTouchLog");
 
         using (StreamWriter sw = new StreamWriter(outFilename))
         {
             List<InputPositionLog> positionLogs = new List<InputPositionLog>();
-            Console.WriteLine("xml count: " + positionDataItems.Count);
             foreach (XmlNode childNode in positionDataItems)
             {
                 InputPositionLog ipl = GetInputPositionLog(childNode);
@@ -79,73 +148,23 @@ public class LogParser
                 }
             }
 
-            Console.WriteLine("COUNT:" + positionLogs.Count);
-
             InputPositionLog[] touchPositionLogs = positionLogs.ToArray();
 
             sw.WriteLine(header);
             foreach (XmlNode childNode in dataItems)
             {
-                parser.Parse(childNode, sw, touchPositionLogs);
+                ParseNode(childNode, sw, touchPositionLogs);
             }
 
-            parser.WriteResults(sw);
+	    WriteResult(sw);
         }
     }
 
-    static CultureInfo usCulture = new CultureInfo("en-US");
-
-    float m_timeSetTargetMoveLast = 0f;
-    int[] m_failures = new int[4];
-    int[] m_attempts = new int[4];
-    int[] m_attacksDone = new int[4];
-    float[] m_totalTimeSpent = new float[4];
-
-    static InputPositionLog GetInputPositionLog(XmlNode currentNode)
-    {
-        InputPositionLog result = new InputPositionLog();
-
-        //Console.Write(currentNode.Name + ", ");
-        XmlNode timeStampNode = currentNode["globalTimestamp"];
-        if (timeStampNode == null)
-        {
-            Console.WriteLine("timestamp node was null");
-            result.timestamp = -1;
-            return result;
-        }
-
-        //Console.WriteLine(currentNode.Name);
-
-        result.timestamp = Convert.ToSingle(timeStampNode.InnerText, usCulture);
-        result.inputID = Convert.ToInt32(currentNode["inputID"].InnerText);
-
-        Vector2 pos = new Vector2();
-        XmlNodeList positions = currentNode["touchPositions"].ChildNodes;
-        foreach (XmlNode childNode in positions)
-        {
-            XmlNode x = childNode["x"];
-            XmlNode y = childNode["y"];
-            if (x != null && y != null)
-            {
-                float posX = Convert.ToSingle(x.InnerText, usCulture);
-                float posY = Convert.ToSingle(y.InnerText, usCulture);
-
-                if (posX > 1000 || posY > 1000)
-                {
-                    continue;
-                }
-
-                pos.x = posX;
-                pos.y = posY;
-            }
-        }
-
-        result.joystickFingerPos = pos;
-
-        return result;
+    JoystickData[] GetJoystickData() {
+        return m_jsData;
     }
 
-    void Parse(XmlNode currentNode, StreamWriter sw, InputPositionLog[] touchPositionLogs)
+    void ParseNode(XmlNode currentNode, StreamWriter sw, InputPositionLog[] touchPositionLogs)
     {
         XmlNode typeNode = currentNode["logType"];
         if (typeNode == null)
@@ -224,31 +243,13 @@ public class LogParser
 
         float timestamp_single = Convert.ToSingle(timestamp, usCulture);
         string success = LogParser.GetSuccessValue(inputGesture, targetGesture);
-        string timeSpent = LogParser.GetTimeSpent(
-          timestamp_single, m_timeSetTargetMoveLast);
+        string timeSpent = LogParser.GetTimeSpent(timestamp_single, m_timeSetTargetMoveLast);
         string joystickType = LogParser.GetJoystickType(conventionalJoystick);
+	int joystickID = Convert.ToInt32(joystickType);
         string attacksDone = "-1";
 
         int targetGestureID = Convert.ToInt32(targetGesture);
         int inputGestureID = Convert.ToInt32(inputGesture);
-        float t = Convert.ToSingle(timeSpent, usCulture);
-        if (targetGestureID >= 0)
-        {
-            m_attempts[targetGestureID]++;
-        }
-        if (inputGestureID >= 0)
-        {
-            m_attacksDone[inputGestureID]++;
-            attacksDone = m_attacksDone[inputGestureID].ToString();
-        }
-        if (success == "0")
-        {
-            m_failures[targetGestureID]++;
-        }
-        else if (success == "1")
-        {
-            m_totalTimeSpent[targetGestureID] += t;
-        }
 
         float globalTimestamp_single = Convert.ToSingle(globalTimestamp, usCulture);
         // Touch area.
@@ -263,8 +264,6 @@ public class LogParser
             }
         }
 
-        //Console.Write("Count2: " + positions.Count + "; ");
-
         // We calculate the total distance BEFORE sorting because we want the actual distance the finger travelled and not some arbitrary route.
         double totalDistance = CalculateTotalDistanceFromPoints(positions.ToArray());
     
@@ -274,6 +273,27 @@ public class LogParser
         // This function for calculating the area of irregular polygons requires the array of positions to be sorted clockwise.
         positions.Sort((a, b) => SortCornersClockwiseCenter(a, b, center));
         double totalArea = CalculatePolygonArea(positions.ToArray());
+        
+        float t = Convert.ToSingle(timeSpent, usCulture);
+        if (targetGestureID >= 0)
+        {
+            m_jsData[joystickID].attempts[targetGestureID]++;
+	    m_jsData[joystickID].totalDistance[targetGestureID] += totalDistance;
+	    m_jsData[joystickID].totalArea[targetGestureID] += totalArea;
+        }
+        if (inputGestureID >= 0)
+        {
+            m_jsData[joystickID].attacksDone[inputGestureID]++;
+            attacksDone = m_jsData[joystickID].attacksDone[inputGestureID].ToString();
+        }
+        if (success == "0")
+        {
+            m_jsData[joystickID].failures[targetGestureID]++;
+        }
+        else if (success == "1")
+        {
+            m_jsData[joystickID].totalTimeSpent[targetGestureID] += t;
+        }
 
         // Final print
         string line = id + ",";
@@ -288,25 +308,112 @@ public class LogParser
         sw.WriteLine(line);
     }
 
-    void WriteResults(StreamWriter sw)
+    void WriteResult(StreamWriter sw) {
+        foreach (JoystickData jsData in m_jsData) {
+	    WriteJoystickResult(jsData, sw);
+	}	
+	sw.WriteLine("--------Total Averages--------");
+	WriteTotalResults(m_jsData, sw);
+    }
+
+    void WriteJoystickResult(JoystickData jsData, StreamWriter sw)
     {
         float[] averageTimeSpent = new float[4];
-        float[] averageFailures = new float[4];
-        string header = "Attack,Average Time Spent,Average Failures";
+	float[] averageFailures = new float[4];
+	double[] averageDistance = new double[4];
+	double[] averageArea = new double[4];
+        string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
+	sw.WriteLine("--------" + jsData.name + "--------");
         sw.WriteLine(header);
 
         for (int i = 0; i < 4; i++)
         {
-            averageTimeSpent[i] = (float)m_totalTimeSpent[i] / m_attempts[i];
-            averageFailures[i] = (float)m_failures[i] / m_attempts[i];
+            averageTimeSpent[i] = jsData.totalTimeSpent[i] / jsData.attempts[i];
+            averageFailures[i] = (float)jsData.failures[i] / jsData.attempts[i];
+	    averageDistance[i] = jsData.totalDistance[i] / jsData.attempts[i];
+	    averageArea[i] = jsData.totalArea[i] / jsData.attempts[i];
 
             string line = i.ToString() + ",";
             line += averageTimeSpent[i].ToString(usCulture) + ",";
-            line += averageFailures[i].ToString(usCulture);
-
+            line += averageFailures[i].ToString(usCulture) + ",";
+	    line += averageDistance[i].ToString(usCulture) + ",";
+	    line += averageArea[i].ToString(usCulture);
             sw.WriteLine(line);
         }
     }
+
+    static void WriteTotalResults(JoystickData[] jsData, StreamWriter sw) {
+        string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
+	sw.WriteLine(header);
+	for (int i = 0; i < 4; i++) {
+	    int attempts = 0;
+	    float averageFailures = 0f;
+	    float averageTimeSpent = 0f;
+	    double averageDistance = 0.0;
+	    double averageArea = 0.0;
+
+	    for (int j = 0; j < jsData.Length; j++) {
+	        attempts += jsData[j].attempts[i];
+		averageFailures += jsData[j].failures[i];
+		averageTimeSpent += jsData[j].totalTimeSpent[i];
+		averageDistance += jsData[j].totalDistance[i];
+		averageArea += jsData[j].totalArea[i];
+	    }
+            
+	    averageFailures /= attempts;
+	    averageTimeSpent /= attempts;
+	    averageDistance /= attempts;
+	    averageArea /= attempts;
+
+	    string line = i.ToString() + ",";
+	    line += averageTimeSpent.ToString(usCulture) + ",";
+            line += averageFailures.ToString(usCulture) + ",";
+	    line += averageDistance.ToString(usCulture) + ",";
+	    line += averageArea.ToString(usCulture);
+	    sw.WriteLine(line);
+	}
+    }
+
+    static InputPositionLog GetInputPositionLog(XmlNode currentNode)
+    {
+        InputPositionLog result = new InputPositionLog();
+
+        XmlNode timestampNode = currentNode["globalTimestamp"];
+        if (timestampNode == null)
+        {
+            result.timestamp = -1;
+            return result;
+        }
+
+        result.timestamp = Convert.ToSingle(timestampNode.InnerText, usCulture);
+        result.inputID = Convert.ToInt32(currentNode["inputID"].InnerText);
+
+        Vector2 pos = new Vector2();
+        XmlNodeList positions = currentNode["touchPositions"].ChildNodes;
+        foreach (XmlNode childNode in positions)
+        {
+            XmlNode x = childNode["x"];
+            XmlNode y = childNode["y"];
+            if (x != null && y != null)
+            {
+                float posX = Convert.ToSingle(x.InnerText, usCulture);
+                float posY = Convert.ToSingle(y.InnerText, usCulture);
+
+                if (posX > 1000 || posY > 1000)
+                {
+                    continue;
+                }
+
+                pos.x = posX;
+                pos.y = posY;
+            }
+        }
+
+        result.joystickFingerPos = pos;
+
+        return result;
+    }
+
 
     static string GetTimeSpent(float timestamp, float timeSetTargetMoveLast)
     {
