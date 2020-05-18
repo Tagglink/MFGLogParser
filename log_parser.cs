@@ -92,10 +92,10 @@ public class LogParser
         indexname = Path.GetDirectoryName(csvfiles[0]) + "/index.csv";
 
         using (StreamWriter sw = new StreamWriter(indexname)) {
-	    sw.WriteLine("--------Small Joystick Total Averages--------");
+            string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
+	    sw.WriteLine(header);
 	    LogParser.WriteTotalAverages(smallChallengeData.ToArray(), sw);
-	    sw.WriteLine("--------Big Joystick Total Averages--------");
-	    LogParser.WriteTotalAverages(bigChallengeData.ToArray(), sw);
+	    // LogParser.WriteTotalAverages(bigChallengeData.ToArray(), sw);
 	}
     }
 
@@ -110,15 +110,15 @@ public class LogParser
     }
 
     void ParseLog(string inFilename, string outFilename) {
-        string header = "Attack ID," +
-          "Joystick Type (1 = Conventional)," +
-          "Input Gesture ID," +
-          "Times Done this Input Gesture ID," +
-          "Target Gesture ID," +
+        string header = "AttackID," +
+          "IsConventional," +
+          "InputGestureID," +
+          "TimesPerformed," +
+          "TargetGestureID," +
           "Success," +
-          "Time Spent," +
-          "Total Distance," +
-          "Total Area";
+          "TimeSpent," +
+          "TotalDistance," +
+          "TotalArea";
 
         XmlDocument doc = new XmlDocument();
         doc.PreserveWhitespace = true;
@@ -156,7 +156,7 @@ public class LogParser
                 ParseNode(childNode, sw, touchPositionLogs);
             }
 
-	    WriteResult(sw);
+	    // WriteResult(sw);
         }
     }
 
@@ -202,22 +202,22 @@ public class LogParser
 
     void ParseStartedTesting(StreamWriter sw)
     {
-        sw.WriteLine("--------LOGSTART--------");
+        // sw.WriteLine("--------LOGSTART--------");
     }
 
     void ParseStartedChallenge(StreamWriter sw)
     {
-        sw.WriteLine("--------CHALLENGESTART--------");
+        // sw.WriteLine("--------CHALLENGESTART--------");
     }
 
     void ParseStoppedTesting(StreamWriter sw)
     {
-        sw.WriteLine("--------LOGEND--------");
+        // sw.WriteLine("--------LOGEND--------");
     }
 
     void ParseStoppedChallenge(StreamWriter sw)
     {
-        sw.WriteLine("--------CHALLENGEEND--------");
+        // sw.WriteLine("--------CHALLENGEEND--------");
     }
 
     void ParseChangedMove(XmlNode node, StreamWriter sw)
@@ -346,8 +346,6 @@ public class LogParser
     }
 
     static void WriteTotalAverages(ChallengeData[] chData, StreamWriter sw) {
-        string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
-	sw.WriteLine(header);
 	for (int i = 0; i < 4; i++) {
 	    int attackID = LogParser.ReorderAttackID(i);
 	    int attempts = 0;
