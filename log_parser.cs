@@ -89,14 +89,14 @@ public class LogParser
 	    bigChallengeData.Add(chData[1]);
 	}
         
-        indexname = Path.GetDirectoryName(csvfiles[0]) + "/index.csv";
+        // indexname = Path.GetDirectoryName(csvfiles[0]) + "/index.csv";
 
-        using (StreamWriter sw = new StreamWriter(indexname)) {
+        /*using (StreamWriter sw = new StreamWriter(indexname)) {
             string header = "Attack,Average Time Spent,Average Failures,Average Distance,Average Area";
 	    sw.WriteLine(header);
 	    LogParser.WriteTotalAverages(smallChallengeData.ToArray(), sw);
 	    // LogParser.WriteTotalAverages(bigChallengeData.ToArray(), sw);
-	}
+	}*/
     }
 
     static CultureInfo usCulture = new CultureInfo("en-US");
