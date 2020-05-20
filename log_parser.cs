@@ -102,6 +102,7 @@ public class LogParser
     static CultureInfo usCulture = new CultureInfo("en-US");
 
     float m_timeSetTargetMoveLast = 0f;
+    int m_attemptsSinceSetTargetMoveLast = 0;
     ChallengeData[] m_chData = new ChallengeData[2];
 
     LogParser() {
@@ -117,6 +118,7 @@ public class LogParser
           "TargetGestureID," +
           "Success," +
           "TimeSpent," +
+	  "Attempts," +
           "TotalDistance," +
           "TotalArea";
 
@@ -226,6 +228,7 @@ public class LogParser
         XmlNode timestampNode = node["timeStamp"];
         if (timestampNode == null) return;
         m_timeSetTargetMoveLast = Convert.ToSingle(timestampNode.InnerText, usCulture);
+	m_attemptsSinceSetTargetMoveLast = 0;
     }
 
     void ParseAttackClick(XmlNode node, StreamWriter sw, InputPositionLog[] touchPositionLogs)
@@ -280,6 +283,7 @@ public class LogParser
             m_chData[joystickID].attempts[targetGestureID]++;
 	    m_chData[joystickID].totalDistance[targetGestureID] += totalDistance;
 	    m_chData[joystickID].totalArea[targetGestureID] += totalArea;
+	    m_attemptsSinceSetTargetMoveLast++;
         }
         if (inputGestureID >= 0)
         {
@@ -303,6 +307,7 @@ public class LogParser
         line += targetGesture + ",";
         line += success + ",";
         line += timeSpent + ",";
+	line += m_attemptsSinceSetTargetMoveLast + ",";
         line += totalDistance.ToString(usCulture) + ",";
         line += totalArea.ToString(usCulture);
         sw.WriteLine(line);
