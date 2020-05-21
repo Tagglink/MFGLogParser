@@ -10,3 +10,5 @@ mono log_parser.exe logs/ csv/ || {
   exit 4
 }
 
+R -f test.R -q
+

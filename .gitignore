@@ -1,6 +1,6 @@
 *.exe
-*UserLog*.csv
-*UserLog*.xml
+*.csv
+*.xml
 *.swp
 .*
 pdf/
